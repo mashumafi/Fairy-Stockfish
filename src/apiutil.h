@@ -415,6 +415,7 @@ inline Bitboard checked(const Position& pos) {
 namespace FEN {
 
 enum FenValidation : int {
+    FEN_INVALID_SLIDE15_WALLS = -15,
     FEN_INVALID_COUNTING_RULE = -14,
     FEN_INVALID_CHECK_COUNT = -13,
     FEN_INVALID_NB_PARTS = -11,
@@ -560,7 +561,13 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
         if (c == ' ' || c == '[')
             break;
         if (c == '*')
+        {
+            if (v->slide15)
+            {
+                board.set_piece(v->maxRank-rankIdx, fileIdx, c);
+            }
             ++fileIdx;
+        }
         else if (isdigit(c))
         {
             fileIdx += c - '0';
@@ -829,6 +836,33 @@ inline Validation check_number_of_kings(const std::string& fenBoard, const std::
     return OK;
 }
 
+inline bool get_slide_walls(const CharBoard& board, std::array<CharSquare, 4>& walls)
+{
+    size_t count = 0;
+    for (int r = 0; r < board.get_nb_ranks(); ++r)
+    {
+        for (int c = 0; c < board.get_nb_files(); ++c)
+        {
+            if (board.get_piece(r, c) == '*')
+            {
+                if (count == 4)
+                {
+                    std::cerr << "Too many walls" << board << std::endl;
+                    return false;
+                }
+
+                walls[count].rowIdx = r;
+                walls[count].fileIdx = c;
+                ++count;
+            }
+        }
+    }
+    if (count < 4)
+        std::cerr << "Not enough walls: " << count << board << std::endl;
+
+    return count == 4;
+}
+
 
 inline Validation check_en_passant_square(const std::string& enPassantInfo) {
     if (enPassantInfo.size() != 1 || enPassantInfo[0] != '-')
@@ -974,6 +1008,16 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
             kingPositions[BLACK] = board.get_square_for_piece(v->pieceToChar[make_piece(BLACK, KING)]);
             if (check_touching_kings(board, kingPositions) == NOK)
                 return FEN_TOUCHING_KINGS;
+        }
+    }
+
+    // check slide 15 wall layout
+    if (v->slide15)
+    {
+        std::array<CharSquare, 4> walls;
+        if (!get_slide_walls(board,  walls))
+        {
+            return FEN_INVALID_SLIDE15_WALLS;
         }
     }
 

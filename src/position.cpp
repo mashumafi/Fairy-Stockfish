@@ -1367,6 +1367,72 @@ bool Position::pseudo_legal(const Move m) const {
   return true;
 }
 
+inline void print_bitboard(const Bitboard& bitboard)
+{
+    std::cerr << "  ";
+    for (File file = FILE_A; file <= FILE_MAX; ++file) {
+        std::cerr << file << " ";
+    }
+    std::cerr << std::endl;
+    for (Rank rank = RANK_MAX; rank >= RANK_1; --rank) {
+        for (File file = FILE_A; file <= FILE_MAX; ++file) {
+            if (file == FILE_A)
+                std::cerr << rank << " ";
+            Square square = static_cast<Square>(rank * NORTH + file);
+            std::cerr << (bitboard & (square_bb(square)) ? "X " : ". ");
+        }
+        std::cerr << std::endl;
+    }
+}
+
+// Shifts the board based on slide 15 rules
+
+Bitboard Position::slide15(Square to, Bitboard board) const
+{
+  if (var->slide15)
+  {
+      Square wall = msb(st->wallSquares);
+      Direction d = static_cast<Direction>(0);
+      if(file_of(wall) < FILE_MAX - 1 && (st->wallSquares << (EAST * 2)) & square_bb(to))
+      {
+        d = EAST * 2;
+      }
+      else if(file_of(wall) > FILE_B && (st->wallSquares >> (-WEST * 2)) & square_bb(to))
+      {
+        d = WEST * 2;
+      }
+      else if(rank_of(wall) < RANK_MAX - 1 && (st->wallSquares << (NORTH * 2)) & square_bb(to))
+      {
+        d = NORTH * 2;
+      }
+      else if(rank_of(wall) > RANK_2 && (st->wallSquares >> (-SOUTH * 2)) & square_bb(to))
+      {
+        d = SOUTH * 2;
+      }
+
+      if (d != 0)
+      {
+        Bitboard shifted_occupied;
+        Bitboard shifted_wall;
+        if (d < 0)
+        {
+            shifted_wall = st->wallSquares >> -d;
+            shifted_occupied = (shifted_wall & board) << -d;
+        }
+        else
+        {
+            shifted_wall = st->wallSquares << d;
+            shifted_occupied = (shifted_wall & board) >> d;
+        }
+
+        board |= shifted_wall; // Add the new walls
+        board &= ~st->wallSquares; // Remove the old walls
+        board |= shifted_occupied; // Move the old pieces
+      }
+  }
+
+  return board;
+}
 
 /// Position::gives_check() tests whether a pseudo-legal move gives a check
 
@@ -1382,7 +1448,8 @@ bool Position::gives_check(Move m) const {
   if (!count<KING>(~sideToMove))
       return false;
 
-  Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces()) | to;
+  Bitboard occupied = slide15(to, (type_of(m) != DROP ? pieces() ^ from : pieces()) | to);
+
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
   if (type_of(moved_piece(m)) == JANGGI_CANNON)
       janggiCannons = (type_of(m) == DROP ? janggiCannons : janggiCannons ^ from) | to;

@@ -274,6 +274,8 @@ public:
   Piece moved_piece(Move m) const;
   Piece captured_piece() const;
 
+  Bitboard slide15(Square to, Bitboard board) const;
+
   // Piece specific
   bool pawn_passed(Color c, Square s) const;
   bool opposite_bishops() const;

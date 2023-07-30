@@ -148,6 +148,13 @@ namespace {
         v->doubleStep = false;
         return v;
     }
+    // Magic Square (sliding puzzle having 15 square tiles)
+    Variant* slide15_variant() {
+        Variant* v = chess_variant_base()->init();
+        v->startFen = "rnbqkbnr/pppppppp/**6/**6/8/8/PPPPPPPP/RNBQKBNR w - - 0 1";
+        v->slide15 = true;
+        return v;
+    }
     // Makruk (Thai Chess)
     // https://en.wikipedia.org/wiki/Makruk
     Variant* makruk_variant() {
@@ -1845,6 +1852,7 @@ void VariantMap::init() {
     add("flipello", flipello_variant());
     add("minixiangqi", minixiangqi_variant());
     add("raazuvaa", raazuvaa_variant());
+    add("slide15", slide15_variant());
 #ifdef LARGEBOARDS
     add("shogi", shogi_variant());
     add("shoshogi", shoshogi_variant());

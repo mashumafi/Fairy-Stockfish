@@ -66,6 +66,7 @@ struct Variant {
   bool blastOnCapture = false;
   bool petrifyOnCapture = false;
   bool doubleStep = true;
+  bool slide15 = false;
   Bitboard doubleStepRegion[COLOR_NB] = {Rank2BB, Rank7BB};
   Bitboard tripleStepRegion[COLOR_NB] = {};
   Bitboard enPassantRegion = AllSquares;
