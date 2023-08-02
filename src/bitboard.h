@@ -174,6 +174,37 @@ inline Bitboard square_bb(Square s) {
 }
 
 
+// Shifts the board based on slide 15 rules
+// The move should be the current wall location + an adjacent square
+
+inline Bitboard slide_bb(Move m, Bitboard board)
+{
+    Square from = from_sq(m);
+    Square to = to_sq(m);
+    Direction d = static_cast<Direction>(static_cast<int>(to) - static_cast<int>(from));
+
+    Bitboard wallSquares = square_bb(from) | square_bb(from + NORTH) | square_bb(from + EAST) | square_bb(from + NORTH_EAST);
+    Bitboard shifted_wall;
+    Bitboard shifted_occupied;
+    if (d < 0)
+    {
+        shifted_wall = wallSquares >> -d;
+        shifted_occupied = (shifted_wall & board) << -d;
+    }
+    else
+    {
+        shifted_wall = wallSquares << d;
+        shifted_occupied = (shifted_wall & board) >> d;
+    }
+
+    board |= shifted_wall; // Add the new walls
+    board &= ~wallSquares; // Remove the old walls
+    board |= shifted_occupied; // Move the old pieces
+
+  return board;
+}
+
+
 /// Overloads of bitwise operators between a Bitboard and a Square for testing
 /// whether a given bit is set in a bitboard, and for setting and clearing bits.
 

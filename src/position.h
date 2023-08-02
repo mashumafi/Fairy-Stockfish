@@ -274,7 +274,9 @@ public:
   Piece moved_piece(Move m) const;
   Piece captured_piece() const;
 
-  Bitboard slide15(Square to, Bitboard board) const;
+  Move slide_move(Square to) const;
+  Square slide_square(Move m, Square s) const;
+  bool has_piece(Square sq);
 
   // Piece specific
   bool pawn_passed(Color c, Square s) const;
@@ -344,6 +346,9 @@ private:
   void move_piece(Square from, Square to);
   template<bool Do>
   void do_castling(Color us, Square from, Square& to, Square& rfrom, Square& rto);
+
+  template<bool Do>
+  void do_slide(Square to);
 
   // Data members
   Piece board[SQUARE_NB];

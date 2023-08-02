@@ -1385,53 +1385,35 @@ inline void print_bitboard(const Bitboard& bitboard)
     }
 }
 
-// Shifts the board based on slide 15 rules
-
-Bitboard Position::slide15(Square to, Bitboard board) const
+Move Position::slide_move(Square to) const
 {
-  if (var->slide15)
-  {
-      Square wall = msb(st->wallSquares);
-      Direction d = static_cast<Direction>(0);
-      if(file_of(wall) < FILE_MAX - 1 && (st->wallSquares << (EAST * 2)) & square_bb(to))
-      {
-        d = EAST * 2;
-      }
-      else if(file_of(wall) > FILE_B && (st->wallSquares >> (-WEST * 2)) & square_bb(to))
-      {
-        d = WEST * 2;
-      }
-      else if(rank_of(wall) < RANK_MAX - 1 && (st->wallSquares << (NORTH * 2)) & square_bb(to))
-      {
-        d = NORTH * 2;
-      }
-      else if(rank_of(wall) > RANK_2 && (st->wallSquares >> (-SOUTH * 2)) & square_bb(to))
-      {
-        d = SOUTH * 2;
-      }
+    if (!var->slide15)
+        return static_cast<Move>(0);
 
-      if (d != 0)
-      {
-        Bitboard shifted_occupied;
-        Bitboard shifted_wall;
-        if (d < 0)
-        {
-            shifted_wall = st->wallSquares >> -d;
-            shifted_occupied = (shifted_wall & board) << -d;
-        }
-        else
-        {
-            shifted_wall = st->wallSquares << d;
-            shifted_occupied = (shifted_wall & board) >> d;
-        }
+    Square wall = msb(st->wallSquares);
+    if(file_of(wall) < FILE_MAX - 1 && (st->wallSquares << (EAST * 2)) & square_bb(to))
+    {
+        return make_move(wall, wall + EAST * 2);
+    }
+    else if(file_of(wall) > FILE_B && (st->wallSquares >> (-WEST * 2)) & square_bb(to))
+    {
+        return make_move(wall, wall + WEST * 2);
+    }
+    else if(rank_of(wall) < RANK_MAX - 1 && (st->wallSquares << (NORTH * 2)) & square_bb(to))
+    {
+        return make_move(wall, wall + NORTH * 2);
+    }
+    else if(rank_of(wall) > RANK_2 && (st->wallSquares >> (-SOUTH * 2)) & square_bb(to))
+    {
+        return make_move(wall, wall + SOUTH * 2);
+    }
 
-        board |= shifted_wall; // Add the new walls
-        board &= ~st->wallSquares; // Remove the old walls
-        board |= shifted_occupied; // Move the old pieces
-      }
-  }
+    return static_cast<Move>(0);
+}
 
-  return board;
+bool Position::has_piece(Square sq)
+{
+    return piece_on(sq) != NO_PIECE;
 }
 
 /// Position::gives_check() tests whether a pseudo-legal move gives a check
@@ -1443,12 +1425,13 @@ bool Position::gives_check(Move m) const {
 
   Square from = from_sq(m);
   Square to = to_sq(m);
+  Move slide_m = slide_move(to);
 
   // No check possible without king
   if (!count<KING>(~sideToMove))
       return false;
 
-  Bitboard occupied = slide15(to, (type_of(m) != DROP ? pieces() ^ from : pieces()) | to);
+  Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces()) | to;
 
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
   if (type_of(moved_piece(m)) == JANGGI_CANNON)
@@ -1944,6 +1927,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   // Set capture piece
   st->capturedPiece = captured;
 
+  do_slide<true>(to);
+
   // Add gating piece
   if (is_gating(m))
   {
@@ -2177,6 +2162,8 @@ void Position::undo_move(Move m) {
       pc = piece_on(to);
   }
 
+  do_slide<false>(to);
+
   // Remove gated piece
   if (is_gating(m))
   {
@@ -2264,6 +2251,33 @@ void Position::undo_move(Move m) {
   --gamePly;
 
   assert(pos_is_ok());
+}
+
+template<bool Do>
+void Position::do_slide(Square to)
+{
+    Move m = slide_move(to);
+    if (m == 0)
+        return;
+
+    Direction d = static_cast<Direction>(static_cast<int>(to_sq(m)) - static_cast<int>(from_sq(m)));
+
+    Square to1 = lsb(st->wallSquares);
+    Square to2 = to1 + NORTH;
+    Square to3 = to1 + EAST;
+    Square to4 = to1 + NORTH_EAST;
+
+    if (has_piece(Do ? to1 - d : to1))
+        move_piece(Do ? to1 - d : to1, Do ? to1 : to1 - d);
+
+    if (has_piece(Do ? to2 - d : to2))
+        move_piece(Do ? to2 - d : to2, Do ? to2 : to2 - d);
+
+    if (has_piece(Do ? to3 - d : to3))
+        move_piece(Do ? to3 - d : to3, Do ? to3 : to3 - d);
+
+    if (has_piece(Do ? to4 - d : to4))
+        move_piece(Do ? to4 - d : to4, Do ? to4 : to4 - d);
 }
 
 
