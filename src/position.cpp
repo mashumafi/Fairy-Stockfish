@@ -1572,6 +1572,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Color them = ~us;
   Square from = from_sq(m);
   Square to = to_sq(m);
+  Move slide_m = slide_move(to);
   Piece pc = moved_piece(m);
   Piece captured = piece_on(type_of(m) == EN_PASSANT ? capture_square(to) : to);
   if (to == from)
@@ -1927,7 +1928,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   // Set capture piece
   st->capturedPiece = captured;
 
-  do_slide<true>(to);
+  do_slide<true>(slide_m);
 
   // Add gating piece
   if (is_gating(m))
@@ -2127,6 +2128,7 @@ void Position::undo_move(Move m) {
   Color us = sideToMove;
   Square from = from_sq(m);
   Square to = to_sq(m);
+  Move slide_m = slide_move(to);
   Piece pc = piece_on(to);
 
   assert(type_of(m) == DROP || empty(from) || type_of(m) == CASTLING || is_gating(m)
@@ -2162,7 +2164,7 @@ void Position::undo_move(Move m) {
       pc = piece_on(to);
   }
 
-  do_slide<false>(to);
+  do_slide<false>(slide_m);
 
   // Remove gated piece
   if (is_gating(m))
@@ -2254,13 +2256,11 @@ void Position::undo_move(Move m) {
 }
 
 template<bool Do>
-void Position::do_slide(Square to)
+void Position::do_slide(Move m)
 {
-    Move m = slide_move(to);
-    if (m == 0)
-        return;
-
     Direction d = static_cast<Direction>(static_cast<int>(to_sq(m)) - static_cast<int>(from_sq(m)));
+    if (d == 0)
+        return;
 
     Square to1 = lsb(st->wallSquares);
     Square to2 = to1 + NORTH;

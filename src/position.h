@@ -348,7 +348,7 @@ private:
   void do_castling(Color us, Square from, Square& to, Square& rfrom, Square& rto);
 
   template<bool Do>
-  void do_slide(Square to);
+  void do_slide(Move m);
 
   // Data members
   Piece board[SQUARE_NB];
