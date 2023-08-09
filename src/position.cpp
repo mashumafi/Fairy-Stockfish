@@ -1415,17 +1415,14 @@ bool Position::gives_check(Move m) const {
 
   Square from = from_sq(m);
   Square to = to_sq(m);
-  Move slide_m = slide_move(to);
-  Square slide_to = slide_square(slide_m, to);
-  Square slide_from = slide_square(slide_m, from);
 
   // No check possible without king
   if (!count<KING>(~sideToMove))
       return false;
 
-  Bitboard occupied = slide_bb(slide_m, (type_of(m) != DROP ? pieces() ^ from : pieces()) | to);
+  Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces()) | to;
 
-  Bitboard janggiCannons = pieces(slide_m, JANGGI_CANNON);
+  Bitboard janggiCannons = pieces(JANGGI_CANNON);
   if (type_of(moved_piece(m)) == JANGGI_CANNON)
       janggiCannons = (type_of(m) == DROP ? janggiCannons : janggiCannons ^ from) | to;
   else if (janggiCannons & to)
