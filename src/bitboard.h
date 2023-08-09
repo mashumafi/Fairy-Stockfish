@@ -114,6 +114,12 @@ extern Bitboard BoardSizeBB[FILE_NB][RANK_NB];
 extern RiderType AttackRiderTypes[PIECE_TYPE_NB];
 extern RiderType MoveRiderTypes[2][PIECE_TYPE_NB];
 
+// Slide 15 lookups
+extern Bitboard SlideFromBB[SQUARE_NB];
+extern Bitboard SlideToBB[SQUARE_NB][SQUARE_NB];
+extern Direction SlideDir[SQUARE_NB][SQUARE_NB];
+extern Square SlideSquare[SQUARE_NB][SQUARE_NB];
+
 #ifdef LARGEBOARDS
 int popcount(Bitboard b); // required for 128 bit pext
 #endif
@@ -177,23 +183,24 @@ inline Bitboard square_bb(Square s) {
 // Shifts the board based on slide 15 rules
 // The move should be the current wall location + an adjacent square
 
-inline Bitboard slide_bb(Move m, Bitboard board)
+inline Bitboard slide_bb(Move slide, Bitboard board)
 {
-    Square from = from_sq(m);
-    Square to = to_sq(m);
-    Direction d = static_cast<Direction>(static_cast<int>(to) - static_cast<int>(from));
+    if (slide == MOVE_NONE)
+      return board;
+  
+    Square from = from_sq(slide);
+    Square to = to_sq(slide);
+    Direction d = SlideDir[from][to];
 
-    Bitboard wallSquares = square_bb(from) | square_bb(from + NORTH) | square_bb(from + EAST) | square_bb(from + NORTH_EAST);
-    Bitboard shifted_wall;
+    Bitboard wallSquares = SlideFromBB[from];
+    Bitboard shifted_wall = SlideToBB[from][to];
     Bitboard shifted_occupied;
     if (d < 0)
     {
-        shifted_wall = wallSquares >> -d;
         shifted_occupied = (shifted_wall & board) << -d;
     }
     else
     {
-        shifted_wall = wallSquares << d;
         shifted_occupied = (shifted_wall & board) >> d;
     }
 
@@ -202,6 +209,14 @@ inline Bitboard slide_bb(Move m, Bitboard board)
     board |= shifted_occupied; // Move the old pieces
 
   return board;
+}
+
+inline Square slide_square(Move slide, Square square) {
+  if (slide == MOVE_NONE)
+    return square;
+
+  Square from = from_sq(slide);
+  return SlideSquare[from][square];
 }
 
 

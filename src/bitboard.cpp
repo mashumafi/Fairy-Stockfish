@@ -40,6 +40,11 @@ Bitboard BoardSizeBB[FILE_NB][RANK_NB];
 RiderType AttackRiderTypes[PIECE_TYPE_NB];
 RiderType MoveRiderTypes[2][PIECE_TYPE_NB];
 
+Bitboard SlideFromBB[SQUARE_NB];
+Bitboard SlideToBB[SQUARE_NB][SQUARE_NB];
+Direction SlideDir[SQUARE_NB][SQUARE_NB];
+Square SlideSquare[SQUARE_NB][SQUARE_NB];
+
 Magic RookMagicsH[SQUARE_NB];
 Magic RookMagicsV[SQUARE_NB];
 Magic BishopMagics[SQUARE_NB];
@@ -374,6 +379,48 @@ void Bitboards::init() {
               }
               BetweenBB[s1][s2] |= s2;
           }
+  }
+
+  for (Square from = SQ_A1; from <= SQ_MAX; ++from)
+  {
+        Square top_left = make_square(static_cast<File>(file_of(from) / 2), static_cast<Rank>(rank_of(from) / 2));
+        Bitboard wallSquares = square_bb(top_left) | square_bb(top_left + NORTH) | square_bb(top_left + EAST) | square_bb(top_left + NORTH_EAST);
+
+        SlideFromBB[from] = wallSquares;
+
+        for (Square to = SQ_A1; to <= SQ_MAX; ++to)
+        {
+            Direction d = static_cast<Direction>(0);
+            if(file_of(from) < FILE_MAX - 1 && (wallSquares << (EAST * 2)) & square_bb(to))
+            {
+                d = EAST * 2;
+            }
+            else if(file_of(from) > FILE_B && (wallSquares >> (-WEST * 2)) & square_bb(to))
+            {
+                d = WEST * 2;
+            }
+            else if(rank_of(from) < RANK_MAX - 1 && (wallSquares << (NORTH * 2)) & square_bb(to))
+            {
+                d = NORTH * 2;
+            }
+            else if(rank_of(from) > RANK_2 && (wallSquares >> (-SOUTH * 2)) & square_bb(to))
+            {
+                d = SOUTH * 2;
+            }
+
+            Bitboard shifted_wall;
+            if (d < 0)
+            {
+                shifted_wall = wallSquares >> -d;
+            }
+            else if(d > 0)
+            {
+                shifted_wall = wallSquares << d;
+            }
+
+            SlideToBB[from][to] = shifted_wall;
+            SlideDir[from][to] = d;
+        }
   }
 }
 

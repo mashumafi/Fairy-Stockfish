@@ -904,32 +904,35 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
 /// Position::attackers_to() computes a bitboard of all pieces which attack a
 /// given square. Slider attacks use the occupied bitboard to indicate occupancy.
 
-Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
 
+Bitboard Position::attackers_to(Move slide, Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
+    
   // Use a faster version for variants with moderate rule variations
   if (var->fastAttacks)
   {
-      return  (pawn_attacks_bb(~c, s)          & pieces(c, PAWN))
-            | (attacks_bb<KNIGHT>(s)           & pieces(c, KNIGHT, ARCHBISHOP, CHANCELLOR))
-            | (attacks_bb<  ROOK>(s, occupied) & pieces(c, ROOK, QUEEN, CHANCELLOR))
-            | (attacks_bb<BISHOP>(s, occupied) & pieces(c, BISHOP, QUEEN, ARCHBISHOP))
-            | (attacks_bb<KING>(s)             & pieces(c, KING, COMMONER));
+      return  (pawn_attacks_bb(~c, s)          & pieces(slide, c, PAWN))
+            | (attacks_bb<KNIGHT>(s)           & pieces(slide, c, KNIGHT, ARCHBISHOP, CHANCELLOR))
+            | (attacks_bb<  ROOK>(s, occupied) & pieces(slide, c, ROOK, QUEEN, CHANCELLOR))
+            | (attacks_bb<BISHOP>(s, occupied) & pieces(slide, c, BISHOP, QUEEN, ARCHBISHOP))
+            | (attacks_bb<KING>(s)             & pieces(slide, c, KING, COMMONER));
   }
 
   // Use a faster version for selected fairy pieces
   if (var->fastAttacks2)
   {
-      return  (pawn_attacks_bb(~c, s)             & pieces(c, PAWN, BREAKTHROUGH_PIECE, GOLD))
-            | (attacks_bb<KNIGHT>(s)              & pieces(c, KNIGHT))
-            | (attacks_bb<  ROOK>(s, occupied)    & (  pieces(c, ROOK, QUEEN, DRAGON)
-                                                     | (pieces(c, LANCE) & PseudoAttacks[~c][LANCE][s])))
-            | (attacks_bb<BISHOP>(s, occupied)    & pieces(c, BISHOP, QUEEN, DRAGON_HORSE))
-            | (attacks_bb<KING>(s)                & pieces(c, KING, COMMONER))
-            | (attacks_bb<FERS>(s)                & pieces(c, FERS, DRAGON, SILVER))
-            | (attacks_bb<WAZIR>(s)               & pieces(c, WAZIR, DRAGON_HORSE, GOLD))
-            | (LeaperAttacks[~c][SHOGI_KNIGHT][s] & pieces(c, SHOGI_KNIGHT))
-            | (LeaperAttacks[~c][SHOGI_PAWN][s]   & pieces(c, SHOGI_PAWN, SILVER));
+      return  (pawn_attacks_bb(~c, s)             & pieces(slide, c, PAWN, BREAKTHROUGH_PIECE, GOLD))
+            | (attacks_bb<KNIGHT>(s)              & pieces(slide, c, KNIGHT))
+            | (attacks_bb<  ROOK>(s, occupied)    & (  pieces(slide, c, ROOK, QUEEN, DRAGON)
+                                                     | (pieces(slide, c, LANCE) & PseudoAttacks[~c][LANCE][s])))
+            | (attacks_bb<BISHOP>(s, occupied)    & pieces(slide, c, BISHOP, QUEEN, DRAGON_HORSE))
+            | (attacks_bb<KING>(s)                & pieces(slide, c, KING, COMMONER))
+            | (attacks_bb<FERS>(s)                & pieces(slide, c, FERS, DRAGON, SILVER))
+            | (attacks_bb<WAZIR>(s)               & pieces(slide, c, WAZIR, DRAGON_HORSE, GOLD))
+            | (LeaperAttacks[~c][SHOGI_KNIGHT][s] & pieces(slide, c, SHOGI_KNIGHT))
+            | (LeaperAttacks[~c][SHOGI_PAWN][s]   & pieces(slide, c, SHOGI_PAWN, SILVER));
   }
+
+  assert(slide == 0); // TODO: Slide bitboards below
 
   Bitboard b = 0;
   for (PieceSet ps = piece_types(); ps;)
@@ -976,6 +979,10 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
       b ^= b & pieces(SOLDIER) & ~PseudoAttacks[~c][SHOGI_PAWN][s];
 
   return b;
+}
+
+Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
+    return attackers_to(MOVE_NONE, s, occupied, c, janggiCannons);
 }
 
 
@@ -1388,27 +1395,10 @@ inline void print_bitboard(const Bitboard& bitboard)
 Move Position::slide_move(Square to) const
 {
     if (!var->slide15)
-        return static_cast<Move>(0);
+        return MOVE_NONE;
 
-    Square wall = msb(st->wallSquares);
-    if(file_of(wall) < FILE_MAX - 1 && (st->wallSquares << (EAST * 2)) & square_bb(to))
-    {
-        return make_move(wall, wall + EAST * 2);
-    }
-    else if(file_of(wall) > FILE_B && (st->wallSquares >> (-WEST * 2)) & square_bb(to))
-    {
-        return make_move(wall, wall + WEST * 2);
-    }
-    else if(rank_of(wall) < RANK_MAX - 1 && (st->wallSquares << (NORTH * 2)) & square_bb(to))
-    {
-        return make_move(wall, wall + NORTH * 2);
-    }
-    else if(rank_of(wall) > RANK_2 && (st->wallSquares >> (-SOUTH * 2)) & square_bb(to))
-    {
-        return make_move(wall, wall + SOUTH * 2);
-    }
-
-    return static_cast<Move>(0);
+    Square from = msb(st->wallSquares);
+    return make_move(from, from + SlideDir[from][to]);
 }
 
 bool Position::has_piece(Square sq)
@@ -1426,14 +1416,16 @@ bool Position::gives_check(Move m) const {
   Square from = from_sq(m);
   Square to = to_sq(m);
   Move slide_m = slide_move(to);
+  Square slide_to = slide_square(slide_m, to);
+  Square slide_from = slide_square(slide_m, from);
 
   // No check possible without king
   if (!count<KING>(~sideToMove))
       return false;
 
-  Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces()) | to;
+  Bitboard occupied = slide_bb(slide_m, (type_of(m) != DROP ? pieces() ^ from : pieces()) | to);
 
-  Bitboard janggiCannons = pieces(JANGGI_CANNON);
+  Bitboard janggiCannons = pieces(slide_m, JANGGI_CANNON);
   if (type_of(moved_piece(m)) == JANGGI_CANNON)
       janggiCannons = (type_of(m) == DROP ? janggiCannons : janggiCannons ^ from) | to;
   else if (janggiCannons & to)
@@ -2258,7 +2250,7 @@ void Position::undo_move(Move m) {
 template<bool Do>
 void Position::do_slide(Move m)
 {
-    Direction d = static_cast<Direction>(static_cast<int>(to_sq(m)) - static_cast<int>(from_sq(m)));
+    Direction d = SlideDir[from_sq(m)][to_sq(m)];
     if (d == 0)
         return;
 

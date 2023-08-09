@@ -219,12 +219,17 @@ public:
   bool allow_virtual_drop(Color c, PieceType pt) const;
 
   // Position representation
+  Bitboard pieces(Move slide, PieceType pt = ALL_PIECES) const;
   Bitboard pieces(PieceType pt = ALL_PIECES) const;
   Bitboard pieces(PieceType pt1, PieceType pt2) const;
+  Bitboard pieces(Move slide, Color c) const;
   Bitboard pieces(Color c) const;
   Bitboard pieces(Color c, PieceType pt) const;
   Bitboard pieces(Color c, PieceType pt1, PieceType pt2) const;
   Bitboard pieces(Color c, PieceType pt1, PieceType pt2, PieceType pt3) const;
+  Bitboard pieces(Move slide, Color c, PieceType pt) const;
+  Bitboard pieces(Move slide, Color c, PieceType pt1, PieceType pt2) const;
+  Bitboard pieces(Move slide, Color c, PieceType pt1, PieceType pt2, PieceType pt3) const;
   Bitboard major_pieces(Color c) const;
   Bitboard non_sliding_riders() const;
   Piece piece_on(Square s) const;
@@ -237,6 +242,8 @@ public:
   template<PieceType Pt> int count(Color c) const;
   template<PieceType Pt> int count() const;
   template<PieceType Pt> Square square(Color c) const;
+  Square square(Move slide, Color c, PieceType pt) const;
+  template<PieceType Pt> Square square(Move slide, Color c) const;
   Square square(Color c, PieceType pt) const;
   bool is_on_semiopen_file(Color c, Square s) const;
 
@@ -248,7 +255,9 @@ public:
 
   // Checking
   Bitboard checkers() const;
+  Bitboard blockers_for_king(Move slide, Color c) const;
   Bitboard blockers_for_king(Color c) const;
+  Bitboard check_squares(Move slide, PieceType pt) const;
   Bitboard check_squares(PieceType pt) const;
   Bitboard pinners(Color c) const;
   Bitboard checked_pseudo_royals(Color c) const;
@@ -259,6 +268,7 @@ public:
   Bitboard attackers_to(Square s, Bitboard occupied) const;
   Bitboard attackers_to(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
+  Bitboard attackers_to(Move slide, Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
   Bitboard attacks_from(Color c, PieceType pt, Square s) const;
   Bitboard moves_from(Color c, PieceType pt, Square s) const;
   Bitboard slider_blockers(Bitboard sliders, Square s, Bitboard& pinners, Color c) const;
@@ -275,7 +285,6 @@ public:
   Piece captured_piece() const;
 
   Move slide_move(Square to) const;
-  Square slide_square(Move m, Square s) const;
   bool has_piece(Square sq);
 
   // Piece specific
@@ -1029,16 +1038,36 @@ inline Piece Position::moved_piece(Move m) const {
   return piece_on(from_sq(m));
 }
 
+inline Bitboard Position::pieces(Move slide, PieceType pt) const {
+  return slide_bb(slide, byTypeBB[pt]);
+}
+
 inline Bitboard Position::pieces(PieceType pt) const {
-  return byTypeBB[pt];
+  return pieces(MOVE_NONE, pt);
 }
 
 inline Bitboard Position::pieces(PieceType pt1, PieceType pt2) const {
   return pieces(pt1) | pieces(pt2);
 }
 
+inline Bitboard Position::pieces(Move slide, Color c) const {
+  return slide_bb(slide, byColorBB[c]);
+}
+
 inline Bitboard Position::pieces(Color c) const {
-  return byColorBB[c];
+  return pieces(MOVE_NONE, c);
+}
+
+inline Bitboard Position::pieces(Move slide, Color c, PieceType pt) const {
+  return pieces(slide, c) & pieces(slide, pt);
+}
+
+inline Bitboard Position::pieces(Move slide, Color c, PieceType pt1, PieceType pt2) const {
+  return pieces(slide, c) & (pieces(slide, pt1) | pieces(slide, pt2));
+}
+
+inline Bitboard Position::pieces(Move slide, Color c, PieceType pt1, PieceType pt2, PieceType pt3) const {
+  return pieces(slide, c) & (pieces(slide, pt1) | pieces(slide, pt2) | pieces(slide, pt3));
 }
 
 inline Bitboard Position::pieces(Color c, PieceType pt) const {
@@ -1073,14 +1102,22 @@ template<PieceType Pt> inline int Position::count() const {
   return count<Pt>(WHITE) + count<Pt>(BLACK);
 }
 
-template<PieceType Pt> inline Square Position::square(Color c) const {
+template<PieceType Pt> inline Square Position::square(Move slide, Color c) const {
   assert(count<Pt>(c) == 1);
-  return lsb(pieces(c, Pt));
+  return lsb(pieces(slide, c, Pt));
+}
+
+inline Square Position::square(Move slide, Color c, PieceType pt) const {
+  assert(count(c, pt) == 1);
+  return lsb(pieces(slide, c, pt));
+}
+
+template<PieceType Pt> inline Square Position::square(Color c) const {
+  return square<Pt>(MOVE_NONE, c);
 }
 
 inline Square Position::square(Color c, PieceType pt) const {
-  assert(count(c, pt) == 1);
-  return lsb(pieces(c, pt));
+  return square(MOVE_NONE, c, pt);
 }
 
 inline Bitboard Position::ep_squares() const {
@@ -1199,16 +1236,33 @@ inline Bitboard Position::checkers() const {
   return st->checkersBB;
 }
 
+inline Bitboard Position::blockers_for_king(Move slide, Color c) const {
+  if (!var->slide15)
+    return st->blockersForKing[c];
+
+  Bitboard pinners[COLOR_NB]; // TODO: Can we ignore pinners?
+  // TODO: Can we optimize this?
+  return slider_blockers(pieces(slide, c), count<KING>(~c) ? square<KING>(slide, ~c) : SQ_NONE, *pinners, c);
+}
+
 inline Bitboard Position::blockers_for_king(Color c) const {
-  return st->blockersForKing[c];
+  return blockers_for_king(MOVE_NONE, c);
 }
 
 inline Bitboard Position::pinners(Color c) const {
   return st->pinners[c];
 }
 
+inline Bitboard Position::check_squares(Move slide, PieceType pt) const {
+  if (!var->slide15)
+    return st->checkSquares[pt];
+
+  Square ksq = count<KING>(~sideToMove) ? square<KING>(~sideToMove) : SQ_NONE;
+  return ksq != SQ_NONE ? attacks_bb(~sideToMove, pt, ksq, pieces()) : Bitboard(0);
+}
+
 inline Bitboard Position::check_squares(PieceType pt) const {
-  return st->checkSquares[pt];
+  return check_squares(MOVE_NONE, pt);
 }
 
 inline bool Position::pawn_passed(Color c, Square s) const {
